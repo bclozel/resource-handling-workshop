@@ -1,0 +1,23 @@
+# Spring Framework Resource Handling Workshop
+
+This feature has been introduced in Spring Framework 4.1 and explained
+in https://spring.io/blog/2014/07/24/spring-framework-4-1-handling-static-web-resources[this blog post].
+
+## Requirements
+
+* Maven 3.2+
+* JDK6+
+* git
+
+Optional:
+
+* Node.js (see https://github.com/creationix/nvm[nvm])
+* gradle (see http://gvmtool.net/[gvm])
+
+
+include::serverside/README.adoc[leveloffset=+1]
+
+include::angularjs/README.adoc[leveloffset=+1]
+
+include::jsmodules/README.adoc[leveloffset=+1]
+

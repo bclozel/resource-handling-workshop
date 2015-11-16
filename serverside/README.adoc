@@ -1,0 +1,130 @@
+= Web application with server side templating
+
+This first part of the workshop aims at demonstrating the current status
+of many web applications and how we can make it better with Spring's
+resource handling feature.
+
+== Create a Spring Boot application
+
+Using the https://start.spring.io[start.spring.io] website, create a Boot
+project and unzip it here.
+You should select at least `web` and `thymeleaf` as dependencies.
+
+You can also create such as project with a single curl command:
+
+[source,bash]
+----
+curl https://start.spring.io/starter.tgz -d dependencies=web,thymeleaf -d type=maven-project | tar -xzvf -
+----
+
+== Add Spring Boot devtools and start the application
+
+Add the devtools dependency to your pom:
+
+[source,xml]
+.pom.xml
+----
+<dependency>
+  <groupId>org.springframework.boot</groupId>
+  <artifactId>spring-boot-devtools</artifactId>
+  <optional>true</optional>
+</dependency>
+----
+
+Run this project in your IDE (by running the main method
+in `*Application`), or on the command line `mvn spring-boot:run`.
+
+== Create a home page
+
+Create a Controller that will handle the `"/"` endpoint, like this:
+
+[source,java]
+.src/main/java/io/spring/workshop/web/HomeController.java
+----
+@Controller
+public class HomeController {
+
+  @RequestMapping("/")
+  public String home(Model model) {
+    model.addAttribute("message", "Hello Spring Boot");
+    return "index";
+  }
+}
+----
+
+And a template that will be rendered for this:
+
+[source,html]
+.src/main/resources/templates/index.html
+----
+<!doctype html>
+<html xmlns:th="http://www.thymeleaf.org">
+<head>
+  <meta charset="utf-8"/>
+  <title>Sample Application</title>
+  <!-- Add link to custom stylesheet -->
+  <!-- Add link to jquery webjar -->
+</head>
+<body>
+  <h1 th:text="${message}">Title</h1>
+</body>
+</html>
+----
+
+== Improve this home page with CSS and JS
+
+Then add the jquery webjar as a dependency and restart your application.
+
+[source,xml]
+.pom.xml
+----
+<dependency>
+  <groupId>org.webjars</groupId>
+  <artifactId>jquery</artifactId>
+  <version>2.1.4</version>
+</dependency>
+----
+
+Since we're modifying the application dependencies, we need to
+restart the application.
+
+
+You can now edit your `index.html` template without restarting.
+Update your home template in order to:
+
+* import jquery in this page and use it
+* create a new `main.css` file with custom styles and import it
+
+== Developer experience
+
+What's like your current front-end developement experience so far?
+
+== Resource handling for webjars
+
+[source,xml]
+.pom.xml
+----
+<dependency>
+  <groupId>org.webjars</groupId>
+  <artifactId>webjars-locator</artifactId>
+  <version>0.28</version>
+</dependency>
+----
+
+Enable now the resource chain and remove version strings from
+HTML imports.
+
+[source,properties]
+.src/main/resources/application.properties
+----
+spring.resources.chain.enabled=true
+----
+
+You don't need to include webjars versions in resource links.
+
+[source,html]
+.src/main/resources/templates/index.html
+----
+<link rel="stylesheet" type="text/css" th:href="@{/main.css}"/>
+<script th:src="@{/webjars/jquery/jquery.min.js}" type="application/javascript"/>
+----

@@ -1,0 +1,189 @@
+= AngularJS web application
+
+The second part of the workshop will focus on adapting an existing AngularJS application in order to:
+
+* use a more flexible project layout
+* use Spring's Resource Handling features
+
+== Build a webjar from the client module
+
+The client module contains now only the source files of the AngularJS application.
+We need to set up the infrastructure to build a webjar we could then use as a dependency in the server module.
+
+First, configure a maven plugin to automatically install Node.js and run node scripts:
+
+[source,xml]
+.pom.xml
+----
+<plugin>
+  <groupId>com.github.eirslett</groupId>
+  <artifactId>frontend-maven-plugin</artifactId>
+  <version>0.0.26</version>
+  <executions>
+    <execution>
+      <id>install node and npm</id>
+      <goals><goal>install-node-and-npm</goal></goals>
+      <configuration>
+        <nodeVersion>v4.2.2</nodeVersion>
+        <npmVersion>2.14.7</npmVersion>
+      </configuration>
+    </execution>
+    <execution>
+      <id>npm install</id>
+      <goals><goal>npm</goal></goals>
+    </execution>
+  </executions>
+</plugin>
+----
+
+Now, running `mvn package` in the client module will install node, and install node dependencies in the `node_modules`
+folder. We still need to build a proper JAR with all required resources.
+
+For this, we can add a task during during the packaging phase that will copy our `src` and `node_modules` folders
+into `target/classes/static` at build time.
+
+[source,xml]
+.pom.xml
+----
+  <plugin>
+    <artifactId>maven-resources-plugin</artifactId>
+    <version>2.7</version>
+    <configuration>
+      <outputDirectory>${project.build.directory}/classes/static</outputDirectory>
+    </configuration>
+  </plugin>
+</plugins>
+<resources>
+  <resource>
+    <directory>${basedir}</directory>
+    <includes>
+      <include>node_modules/**</include>
+    </includes>
+  </resource>
+  <resource>
+      <directory>${basedir}/src</directory>
+      <includes>
+        <include>/**</include>
+      </includes>
+    </resource>
+</resources>
+----
+
+Building this module will create the webjar we need, but this doesn't work with
+our developement experience, since Boot is not aware of that location.
+
+For this, we can create a dev-specific configuration.
+
+[source,properties]
+.src/main/resources/application-dev.properties
+----
+spring.resources.static-locations=classpath:/static/,file:../client/src/,file:../client/node_modules/
+
+spring.devtools.restart.additional-paths=../client/src/,../client/node_modules/
+spring.devtools.restart.additional-exclude=**/*.js,**/*.css
+----
+
+To fully activate this, we need to:
+
+* activate the `"dev"` profile in our IDE
+* make sure that our IDE is using the server module as working directory
+(in IntelliJ IDEA, we need to set `$MODULE_DIR$` as working directory in the run configuration)
+
+== Importing this client module in our webapp
+
+Import this module as a maven dependency in our server module.
+
+Now we can prepare a simple ViewController mapping like this:
+
+[source,java]
+.src/main/java/io/spring/workshop/WebConfig.java
+----
+@Configuration
+public class WebConfig extends WebMvcConfigurerAdapter {
+@Override
+  public void addViewControllers(ViewControllerRegistry registry) {
+    registry.addViewController("/").setViewName("index");
+  }
+}
+----
+
+Run the application.
+
+== Configure cache busting URLs for your resources
+
+For that, we can now configure a resource handling `VersionStrategy`, its goal is to:
+
+* resolve resources when adressed with URLs containing version strings
+* rewrite public URLs in view templates
+
+We're chosing here a `ContentVersionStrategy`, which hashes the content of static
+resources to get URLs such as
+`"http://localhost:8080/src/app-0e05d541f7d557383e937eef3d09a60b.js"`.
+
+[source,properties]
+.src/main/resources/application.properties
+----
+spring.resources.chain.enabled=true
+spring.resources.chain.strategy.content.enabled=true
+----
+
+And update our template so that all URLs look like this:
+
+[source,html]
+.src/main/resources/templates/index.html
+----
+<link rel="stylesheet" th:href="@{/node_modules/todomvc-common/base.css}" />
+
+<!-- ... -->
+
+<script th:src="@{/node_modules/todomvc-common/base.js}"></script>
+<script th:src="@{/node_modules/angular/angular.js}"></script>
+----
+
+== What about resources linked from CSS stylesheets?
+
+Add a simple CSS file with a link to another resource, such as another CSS file or a background image, like:
+
+[source,css]
+.src/main/resources/static/css/main.css
+----
+@import url(/css/base.css);
+----
+
+[source,css]
+.src/main/resources/static/css/base.css
+----
+body #todoapp h1 {
+    text-transform: uppercase;
+    color: green;
+}
+----
+
+And import that CSS file in your main template
+
+[source,html]
+.src/main/resources/templates/index.html
+----
+<link rel="stylesheet" th:href="@{/css/main.css}" />
+----
+
+Spring Framework automatically registered a `CSSLinkResourceTransformer` to update links within
+CSS resources before they're served to clients.
+
+The `main.css` file should contain:
+
+[source,css]
+----
+@import url(/css/base-872ca6a9fdda9e2c1516a84cff5c3bc6.css);
+----
+
+== Supporting live reloading in development mode
+
+
+
+== Developer experience
+
+What part of the developer experience could we improve here?
+
+* What about a JavaScript toolchain to optimize the client application?
+* Is this strategy working with JavaScript module loaders?

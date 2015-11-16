@@ -1,0 +1,366 @@
+= "ES6 ready"  web application
+
+Nowadays web applications are more complex and have their own dependency manager, build toolchain,
+test suite, module loader...
+
+With this project, we will create a JavaScript application with more advanced features, such as:
+
+* a complete build toolchain
+* a module loader ES6 compatible
+* a front-end package manager
+* a templating engine that's not using Servlet infrastructure
+* gradle instead of maven
+
+== Install Gradle
+
+Run `./gradlew build` from the command line to automatically install gradle and the project dependencies.
+
+Simply import this project as a Gradle project in your favorite IDE.
+
+== Set up the client module
+
+First, we need to create a `package.json` file that installs http://jspm.io/[jspm] as front-end package manager.
+
+We also want to following front-end dependencies:
+
+* twitter bootstrap
+* jquery
+
+If you have Node.js already installed and you're already familiar with NPM and JSPM,
+you can use it interactively to issue commands like:
+
+[source]
+----
+npm init
+npm install --save jspm
+jspm init
+jspm install jquery
+...
+----
+
+Otherwise copy/paste this file:
+
+[source,json]
+.client/package.json
+----
+{
+  "private": true,
+  "name": "jsmodules-client",
+  "version": "1.0.0",
+  "dependencies": {},
+  "scripts": {
+    "prepublish": "jspm install"
+  },
+  "jspm": {
+    "directories": {
+      "baseURL": "src",
+      "packages": "src/lib"
+    },
+    "dependencies": {
+      "components/jquery": "github:components/jquery@2.1.4",
+      "twbs/bootstrap": "github:twbs/bootstrap@3.3.5"
+    },
+    "devDependencies": {
+      "traceur": "github:jmcriffey/bower-traceur@0.0.92",
+      "traceur-runtime": "github:jmcriffey/bower-traceur-runtime@0.0.92"
+    }
+  },
+  "devDependencies": {
+    "jspm": "^0.16.14"
+  }
+}
+----
+
+The `config.js` file configures the JavaScript module loader we'll use in this project,
+https://github.com/systemjs/systemjs[System.js].
+
+[source,javascript]
+.client/src/config.js
+----
+System.config({
+  defaultJSExtensions: true,
+  transpiler: "traceur",
+  paths: {
+    "github:*": "lib/github/*"
+  },
+  map: {
+    "components/jquery": "github:components/jquery@2.1.4",
+    "traceur": "github:jmcriffey/bower-traceur@0.0.92",
+    "traceur-runtime": "github:jmcriffey/bower-traceur-runtime@0.0.92",
+    "twbs/bootstrap": "github:twbs/bootstrap@3.3.5",
+    "github:twbs/bootstrap@3.3.5": {
+      "jquery": "github:components/jquery@2.1.4"
+    }
+  }
+});
+----
+
+Locally running `npm install` should install Node.js dependencies in `node_modules` and front-end dependencies in
+`src/lib`.
+
+== Integrate with Gradle
+
+We'd like this project to run on our CI, so we need to run our JavaScript build as part of our main Gradle build.
+
+First, we can install a gradle plugin that automatically (and locally to your project) installs a Node.js distribution
+and creates
+
+[source,groovy]
+.client/build.gradle
+----
+plugins {
+    id "com.moowork.node" version "0.11"
+}
+
+apply plugin: 'java'
+apply plugin: 'com.moowork.node'
+
+node {
+    version = '4.2.2'
+    npmVersion = '2.14.7'
+}
+
+
+jar.dependsOn npmInstall
+----
+
+Running `./gradlew :client:build` will install npm+jspm dependencies, but our JAR is still empty.
+
+We need to configure the JAR task to create a webjar:
+
+[source,groovy]
+.client/build.gradle
+----
+//...
+
+jar {
+    from 'src'
+    eachFile { details -> details.path = 'static/' + details.path }
+}
+
+jar.dependsOn npmInstall
+----
+
+And now we can add this client module as a dependency
+
+[source,groovy]
+.server/build.gradle
+----
+dependencies {
+  compile project(':client')
+  //...
+}
+----
+
+And depend on client resources during developemnt
+
+[source,properties]
+.server/src/main/resources/application-dev.properties
+----
+spring.resources.static-locations=classpath:/static/,file:../client/src/,file:../client/node_modules/
+
+spring.devtools.restart.additional-paths=../client/src/,../client/node_modules/
+spring.devtools.restart.additional-exclude=**/*.js,**/*.css
+----
+
+We now have a server module that depends on a well structured client module.
+
+
+== Use the Mustache templating engine
+
+Add the following dependency in the server module
+
+[source,groovy]
+.server/build.gradle
+----
+compile('org.springframework.boot:spring-boot-starter-mustache')
+----
+
+And now create a WebConfig that will configure a view for the `"/"` endpoint:
+
+[source,java]
+.server/src/main/java/workshop/WebConfig.java
+----
+@Configuration
+public class WebConfig extends WebMvcConfigurerAdapter {
+
+  @Override
+  public void addViewControllers(ViewControllerRegistry registry) {
+    registry.addViewController("/").setViewName("index");
+  }
+
+}
+----
+
+And the index view:
+
+[source,java]
+.server/src/main/resources/templates/index.html
+----
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <title>Spring ES6 Application</title>
+    <meta name="description" content="">
+    <meta name="viewport" content="width=device-width">
+
+    <link rel="stylesheet" type="text/css" href="/css/main.css">
+    <script src="/lib/system.js"></script>
+    <script>
+        System.config({baseURL: "/"});
+    </script>
+    <script src="/config.js"></script>
+    <script>
+        System.import('app/app');
+    </script>
+</head>
+<body>
+<div class="container">
+    <div class="jumbotron">
+        <h1 id="greeting">{insert greeting here}</h1>
+    </div>
+</div>
+</body>
+</html>
+----
+
+Running this application with `./gradlew :server:bootRun` should run an ES6 application!
+
+== Configuring the resource handling chain
+
+In order to rewrite URLs of resources in templates, we need a template helper for Mustache:
+
+[source,java]
+.server/src/main/java/workshop/MustacheCustomizer.java
+----
+@Component
+class MustacheCustomizer {
+
+  private final ResourceUrlProvider resourceUrlProvider;
+
+  private final MustacheViewResolver mustacheViewResolver;
+
+  private final Environment env;
+
+  @Autowired
+  public MustacheCustomizer(ResourceUrlProvider resourceUrlProvider,
+      MustacheViewResolver mustacheViewResolver, Environment env) {
+    this.resourceUrlProvider = resourceUrlProvider;
+    this.mustacheViewResolver = mustacheViewResolver;
+    this.env = env;
+  }
+
+  @PostConstruct
+  public void customizeViewResolver() {
+    Map<String, Object> attributesMap = new HashMap<>();
+
+    attributesMap.put("url", (Mustache.Lambda) (frag, out) -> {
+      String url = frag.execute();
+      String resourceUrl = resourceUrlProvider.getForLookupPath(url);
+      if (resourceUrl != null) {
+        out.write(resourceUrl);
+      }
+      else {
+        out.write(url);
+      }
+    });
+
+    mustacheViewResolver.setAttributesMap(attributesMap);
+  }
+
+}
+----
+
+
+== Configuring cache busting strategies
+
+If we try to reuse the same resolver strategy as our previous project, this will create issues with our JavaScript
+modules. Indeed, files named like `/app/app-872ca6a9fdda9e2c1516a84cff5c3bc6.js` won't work since our module loader
+looks for a file named `app.js`.
+
+We can configure instead, for those files, a more suitable strategy that uses a folder prefix. This folder prefix
+can be a version string of any kind: a simple version `"v12"`, a production date `"2015-05-22"` or even a git
+hash `"872ca6a9"`.
+
+Update your `MustacheCustomizer` class to add a new helper that exposes info.* Environment keys:
+
+[source,java]
+.server/src/main/java/workshop/MustacheCustomizer.java
+----
+    attributesMap.put("info", (Mustache.Lambda) (frag, out) -> {
+      String key = frag.execute();
+      String value = env.getProperty("info." + key);
+      if (value != null) {
+        out.write(value);
+      }
+      else {
+        out.write("");
+      }
+    });
+----
+
+We can now configure our production app to serve javascript libraries with a version prefix
+and other resources (images, CSS) with a file hash suffix.
+
+[source,properties]
+.src/main/resources/application-prod.properties
+----
+info.appversion=f3bd13f5b
+
+spring.resources.chain.enabled=true
+spring.resources.chain.strategy.fixed.enabled=true
+spring.resources.chain.strategy.fixed.version=${info.appversion}
+spring.resources.chain.strategy.fixed.paths=/**/*.js,/**/*.map
+spring.resources.chain.strategy.content.enabled=true
+----
+
+Make sure to update your template to call those template helpers:
+
+[source,java]
+.server/src/main/resources/templates/index.html
+----
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <title>Spring ES6 Application</title>
+    <meta name="description" content="">
+    <meta name="viewport" content="width=device-width">
+
+    <link rel="stylesheet" type="text/css" href="{{#url}}/css/main.css{{/url}}">
+    <script src="{{#url}}/lib/system.js{{/url}}"></script>
+    <script>
+        System.config({baseURL: "/{{#info}}appversion{{/info}}"});
+    </script>
+    <script src="{{#url}}/config.js{{/url}}"></script>
+    <script>
+        System.import('app/app');
+    </script>
+</head>
+<body>
+<div class="container">
+    <div class="jumbotron">
+        <h1 id="greeting">{insert greeting here}</h1>
+    </div>
+</div>
+</body>
+</html>
+----
+
+== Configuring a front-end build toolchain
+
+NOTE: You don't need to actually work on that last step, this is merely a summary of what we could do and how
+we could plug it into our build.
+
+Because HTTP/2 is not there (yet), we'd like to optimize our front-end resources for optimal performances.
+
+We could define our own `gulpfile.js` to describe our build (concatenation, transpilation, minification...)
+and write our distribution in a "dist" folder.
+
+We should now update our build toolchain in order to:
+
+* call this gulp build from our NPM build with a new "build" task
+* create a new "build" gradle task and make it depend on our "install" task
