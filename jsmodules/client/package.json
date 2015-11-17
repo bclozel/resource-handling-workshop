@@ -1,0 +1,26 @@
+{
+  "private": true,
+  "name": "jsmodules-client",
+  "version": "1.0.0",
+  "dependencies": {},
+  "scripts": {
+    "prepublish": "jspm install"
+  },
+  "jspm": {
+    "directories": {
+      "baseURL": "src",
+      "packages": "src/lib"
+    },
+    "dependencies": {
+      "components/jquery": "github:components/jquery@2.1.4",
+      "twbs/bootstrap": "github:twbs/bootstrap@3.3.5"
+    },
+    "devDependencies": {
+      "traceur": "github:jmcriffey/bower-traceur@0.0.92",
+      "traceur-runtime": "github:jmcriffey/bower-traceur-runtime@0.0.92"
+    }
+  },
+  "devDependencies": {
+    "jspm": "^0.16.14"
+  }
+}
