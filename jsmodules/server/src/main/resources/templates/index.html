@@ -7,12 +7,12 @@
     <meta name="description" content="">
     <meta name="viewport" content="width=device-width">
 
-    <link rel="stylesheet" type="text/css" href="/css/main.css">
-    <script src="/lib/system.js"></script>
+    <link rel="stylesheet" type="text/css" href="{{#url}}/css/main.css{{/url}}">
+    <script src="{{#url}}/lib/system.js{{/url}}"></script>
     <script>
-        System.config({baseURL: "/"});
+        System.config({baseURL: "/{{#info}}appversion{{/info}}"});
     </script>
-    <script src="/config.js"></script>
+    <script src="{{#url}}/config.js{{/url}}"></script>
     <script>
         System.import('app/app');
     </script>
